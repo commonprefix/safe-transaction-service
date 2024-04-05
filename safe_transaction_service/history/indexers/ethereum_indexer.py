@@ -313,8 +313,9 @@ class EthereumIndexer(ABC):
         # Check that we are processing the `block_process_limit`, if not, measures are not valid
         if not (
             self.block_auto_process_limit
-            and (to_block_number - from_block_number) == self.block_process_limit
+            and (1 + to_block_number - from_block_number) == self.block_process_limit
         ):
+            # Auto adjustment disabled
             yield
         else:
             start = int(time.time())
@@ -418,7 +419,7 @@ class EthereumIndexer(ABC):
             self.__class__.__name__,
             current_block_number,
         )
-        number_processed_elements = 0
+        total_number_processed_elements = 0
         start_block: Optional[int] = None
         last_block: Optional[int] = None
         almost_updated_addresses = list(
@@ -445,7 +446,15 @@ class EthereumIndexer(ABC):
                     almost_updated_addresses_to_process,
                     current_block_number=current_block_number,
                 )
-                number_processed_elements += len(processed_elements)
+                number_processed_elements = len(processed_elements)
+                logger.debug(
+                    "%s: Processed %d elements for almost updated addresses. From-block-number=%s to-block-number=%d",
+                    self.__class__.__name__,
+                    number_processed_elements,
+                    from_block_number,  # Can be None
+                    to_block_number,
+                )
+                total_number_processed_elements += number_processed_elements
                 if start_block is None:
                     start_block = from_block_number
             last_block = to_block_number
@@ -483,8 +492,8 @@ class EthereumIndexer(ABC):
                 # Get real `to_block_number` processed
                 (
                     processed_elements,
-                    to_block_number,
                     from_block_number,
+                    to_block_number,
                     updated,
                 ) = self.process_addresses(
                     not_updated_addresses_to_process,
@@ -493,7 +502,15 @@ class EthereumIndexer(ABC):
                 if start_block is None or from_block_number < start_block:
                     start_block = from_block_number
 
-                number_processed_elements += len(processed_elements)
+                number_processed_elements = len(processed_elements)
+                logger.debug(
+                    "%s: Processed %d elements for not updated addresses. From-block-number=%s to-block-number=%d",
+                    self.__class__.__name__,
+                    number_processed_elements,
+                    from_block_number,  # Can be None
+                    to_block_number,
+                )
+                total_number_processed_elements += number_processed_elements
                 from_block_number += 1
             if last_block is None or to_block_number > last_block:
                 last_block = to_block_number
@@ -506,4 +523,4 @@ class EthereumIndexer(ABC):
         else:
             number_of_blocks_processed = 0
 
-        return number_processed_elements, number_of_blocks_processed
+        return total_number_processed_elements, number_of_blocks_processed
